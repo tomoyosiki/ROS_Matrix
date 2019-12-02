@@ -3,8 +3,23 @@
 #include <ros_matrix/Matrix_mul.h>
 #include <iostream>
 #include <chrono>
+#include <sched.h>
 
 int main(int argc, char **argv){
+    struct sched_param sp;
+    memset(&sp, 0, sizeof(sp));
+    sp.sched_priority = 50;
+    if (sched_setscheduler(0, SCHED_FIFO, &sp) < 0) {
+        perror("Problem setting scheduling policy to SCHED_FIFO (probably need rtprio rule in /etc/security/limits.conf)");
+        exit(1);
+    }
+
+    cpu_set_t my_set;
+    CPU_ZERO(&my_set);
+    CPU_SET(7, &my_set);
+    sched_setaffinity(0, sizeof(cpu_set_t), &my_set);
+
+
     std::chrono::steady_clock sc;
 
     ros::init(argc, argv, "talker");
@@ -18,8 +33,8 @@ int main(int argc, char **argv){
     ros_matrix::Matrix_mul mats;
     pub.publish(mats);
     ros_matrix::Mat_int elem;
-    int nRow = 1000;
-    int nCol = 1000;
+    int nRow = 2000;
+    int nCol = 2000;
     mats.Lmat.nrow = nRow;
     mats.Lmat.ncol = nCol;
     mats.Rmat.nrow = nRow;
@@ -30,6 +45,8 @@ int main(int argc, char **argv){
         elem.elem = 2;
         mats.Rmat.data.push_back(elem);
     }
+    int test;
+    std::cin >> test;
     auto start = sc.now();
     long sum = 0;
     for(int i = 0; i < nRow; i++){
@@ -43,7 +60,7 @@ int main(int argc, char **argv){
     }
     auto end = sc.now();
     auto time_span = static_cast<std::chrono::duration<double>>(end - start); 
-    std::cout<<"Operation took: "<<time_span.count()<<" seconds !!!" << std::endl;
+    std::cout<< sum << " Operation took: "<<time_span.count()<<" seconds !!!" << std::endl;
 
     pub.publish(mats);
 
