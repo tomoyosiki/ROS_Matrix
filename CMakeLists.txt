@@ -54,6 +54,10 @@ add_executable(mat_srv src/mat_srv.cpp)
 target_link_libraries(mat_srv ${catkin_LIBRARIES})
 add_dependencies(mat_srv ros_matrix_generate_messages_cpp)
 
+add_executable(timer src/timer.cpp)
+target_link_libraries(timer ${catkin_LIBRARIES})
+add_dependencies(timer ros_matrix_generate_messages_cpp)
+
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##

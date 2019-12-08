@@ -4,8 +4,10 @@
 #include <iostream>
 #include <chrono>
 #include <sched.h>
+#include <sstream>
 
 int main(int argc, char **argv){
+    // System Setting, keep process running on appointed core
     struct sched_param sp;
     memset(&sp, 0, sizeof(sp));
     sp.sched_priority = 50;
@@ -21,32 +23,55 @@ int main(int argc, char **argv){
 
 
     std::chrono::steady_clock sc;
-
+    auto end = sc.now();
     ros::init(argc, argv, "talker");
 
     ros::NodeHandle n;
+    std::string arg = argv[1];
+    std::size_t pos;
+    int nRow = std::stoi(arg, &pos);
+    int nCol = nRow;
 
-    ros::Publisher pub = n.advertise<ros_matrix::Matrix_mul>("test", 1000);
+    ros::Publisher pub = n.advertise<ros_matrix::Matrix_mul>("test", nRow * nCol * 2);
 
     ros::Rate loop_rate(1);
-    int count = 0;
     ros_matrix::Matrix_mul mats;
-    pub.publish(mats);
     ros_matrix::Mat_int elem;
-    int nRow = 2000;
-    int nCol = 2000;
+    
     mats.Lmat.nrow = nRow;
     mats.Lmat.ncol = nCol;
     mats.Rmat.nrow = nRow;
     mats.Rmat.ncol = nCol;
     for(int i = 0; i < nRow * nCol; i++){
-        elem.elem = 1;
-        mats.Lmat.data.push_back(elem);
-        elem.elem = 2;
-        mats.Rmat.data.push_back(elem);
+        if(i % 2 == 0){
+            elem.elem = 1;
+            mats.Lmat.data.push_back(elem);
+            elem.elem = 2;
+            mats.Rmat.data.push_back(elem);
+        }else{
+            elem.elem = 2;
+            mats.Lmat.data.push_back(elem);
+            elem.elem = 1;
+            mats.Rmat.data.push_back(elem);
+        }
     }
-    int test;
-    std::cin >> test;
+
+    ROS_INFO("start to send data");
+    // shake hand
+    int count = 0;
+    while(ros::ok() && count < 2){
+        auto start = sc.now();
+        pub.publish(mats);
+        auto end = sc.now();
+        auto time_span = static_cast<std::chrono::duration<double>>(end - start); 
+        std::cout<< " sending data took: "<<time_span.count()<<" seconds !!!" << std::endl;
+        ROS_INFO("end send data, go rest ....");
+        ros::spinOnce();
+
+        loop_rate.sleep();
+        count++;
+    }
+    /*
     auto start = sc.now();
     long sum = 0;
     for(int i = 0; i < nRow; i++){
@@ -61,8 +86,8 @@ int main(int argc, char **argv){
     auto end = sc.now();
     auto time_span = static_cast<std::chrono::duration<double>>(end - start); 
     std::cout<< sum << " Operation took: "<<time_span.count()<<" seconds !!!" << std::endl;
-
-    pub.publish(mats);
+    */
+    
 
     return 0;
 }
