@@ -112,7 +112,7 @@ int main(int argc, char **argv){
 
     ros::NodeHandle n;
 
-    ros::Subscriber sub = n.subscribe("test", 1000, testCallback);
+    ros::Subscriber sub = n.subscribe("test", 2000, testCallback);
     ros::Subscriber sub2 = n.subscribe("timer", 1000, timerCallback);
 
     ROS_INFO("start listen");

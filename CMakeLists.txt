@@ -46,6 +46,7 @@ catkin_package(
   DEPENDS system_lib
 )
 
+
 add_executable(mat_cli src/mat_cli.cpp)
 target_link_libraries(mat_cli ${catkin_LIBRARIES})
 add_dependencies(mat_cli ros_matrix_generate_messages_cpp)
@@ -58,6 +59,9 @@ add_executable(timer src/timer.cpp)
 target_link_libraries(timer ${catkin_LIBRARIES})
 add_dependencies(timer ros_matrix_generate_messages_cpp)
 
+add_executable(mat_cli_loop src/mat_cli_loop.cpp)
+target_link_libraries(mat_cli_loop ${catkin_LIBRARIES})
+add_dependencies(mat_cli_loop ros_matrix_generate_messages_cpp)
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##

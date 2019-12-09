@@ -25,7 +25,7 @@ int main(int argc, char **argv){
     ros::WallTime start_, end_;
     
     start_ = ros::WallTime::now();
-    ros::init(argc, argv, "talker");
+    ros::init(argc, argv, "talker_loop");
 
     ros::NodeHandle n;
     std::string arg = argv[1];
@@ -65,7 +65,7 @@ int main(int argc, char **argv){
     // shake hand
     int count = 0;
     auto sum = 0;
-    while(ros::ok() && count < 2){
+    while(ros::ok()){
         pub.publish(mats);
         //auto time_span = static_cast<std::chrono::duration<double>>(end - start);
         //std::cout<< " sending data took: "<<time_span.count()<<" seconds !!!" << std::endl;
