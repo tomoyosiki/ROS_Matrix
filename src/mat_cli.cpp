@@ -1,13 +1,31 @@
 #include "ros/ros.h"
 #include <ros_matrix/Mat_int.h>
+#include <ros_matrix/Matrix.h>
 #include <ros_matrix/Matrix_mul.h>
 #include <iostream>
 #include <chrono>
 #include <sched.h>
 #include <sstream>
+#include <string>
+#include <ros/callback_queue.h>
+
+ros_matrix::Matrix Omat;
+void testCallback(const ros_matrix::Matrix::ConstPtr& msg){
+    ROS_INFO_STREAM("Start Callback");
+    int nRow = msg->nrow;
+    int nCol = msg->ncol;
+    for(int i = 0; i < nRow * nCol; i++){
+        int a = (int)Omat.data[i].elem;
+        int b = (int)msg->data[i].elem;
+        if(a != b){
+            ROS_INFO_STREAM("Calculation False");
+        }
+    }
+}
 
 int main(int argc, char **argv){
     // System Setting, keep process running on appointed core
+    /*
     struct sched_param sp;
     memset(&sp, 0, sizeof(sp));
     sp.sched_priority = 50;
@@ -20,29 +38,41 @@ int main(int argc, char **argv){
     CPU_ZERO(&my_set);
     CPU_SET(7, &my_set);
     sched_setaffinity(0, sizeof(cpu_set_t), &my_set);
-
+    */
 
     ros::WallTime start_, end_;
     
+    std::string nodeName = argv[1];
     start_ = ros::WallTime::now();
-    ros::init(argc, argv, "talker");
+    ros::init(argc, argv, nodeName);
+
+
 
     ros::NodeHandle n;
-    std::string arg = argv[1];
+    std::string arg = argv[2];
     std::size_t pos;
     int nRow = std::stoi(arg, &pos);
     int nCol = nRow;
 
-    ros::Publisher pub = n.advertise<ros_matrix::Matrix_mul>("test", nRow * nCol * 2);
+    ros::Publisher pub = n.advertise<ros_matrix::Matrix_mul>("mat_cal", 1000);
+    
+    while(pub.getNumSubscribers() == 0){
+        ;
+    }
+
 
     ros::Rate loop_rate(1);
     ros_matrix::Matrix_mul mats;
     ros_matrix::Mat_int elem;
     
+    Omat.nrow = nRow;
+    Omat.ncol = nRow;
     mats.Lmat.nrow = nRow;
     mats.Lmat.ncol = nCol;
     mats.Rmat.nrow = nRow;
     mats.Rmat.ncol = nCol;
+    nodeName.append("_topic");
+    mats.Rtopic = nodeName;
     for(int i = 0; i < nRow * nCol; i++){
         if(i % 2 == 0){
             elem.elem = 1;
@@ -55,43 +85,62 @@ int main(int argc, char **argv){
             elem.elem = 1;
             mats.Rmat.data.push_back(elem);
         }
+        elem.elem = 0;
+        Omat.data.push_back(elem);
     }
     end_ = ros::WallTime::now();
     double execution_time = (end_ - start_).toNSec() * 1e-6;
-    ROS_INFO_STREAM("Exectution time (ms): " << execution_time);
+    ROS_INFO_STREAM("Data Preparation (ms): " << execution_time);
 
-
-    ROS_INFO("start to send data");
-    // shake hand
-    int count = 0;
-    auto sum = 0;
-    while(ros::ok() && count < 2){
-        pub.publish(mats);
-        //auto time_span = static_cast<std::chrono::duration<double>>(end - start);
-        //std::cout<< " sending data took: "<<time_span.count()<<" seconds !!!" << std::endl;
-        ROS_INFO("end send data, go rest ....");
-        //ros::spinOnce();
-
-        loop_rate.sleep();
-        count++;
-    }
-    /*
-    auto start = sc.now();
+    start_ = ros::WallTime::now();
     long sum = 0;
     for(int i = 0; i < nRow; i++){
         for(int j = 0; j < nCol; j++){
             for(int k = 0; k < nCol; k++){
                 int a = (int)mats.Lmat.data[i * nRow + k].elem;
                 int b = (int)mats.Rmat.data[k * nRow + j].elem;
-                sum += a * b;
+                Omat.data[i * nRow + j].elem += a * b;
             }
         }
     }
-    auto end = sc.now();
-    auto time_span = static_cast<std::chrono::duration<double>>(end - start); 
-    std::cout<< sum << " Operation took: "<<time_span.count()<<" seconds !!!" << std::endl;
-    */
+    end_ = ros::WallTime::now();
+    execution_time = (end_ - start_).toNSec() * 1e-6;
+    ROS_INFO_STREAM("Exectution time on local (ms): " << execution_time);
+
+
+    ROS_INFO("start to send data");
+    start_ = ros::WallTime::now();
     
+    ros::Subscriber sub = n.subscribe(nodeName, 0, testCallback);
+    // shake hand
+    int count = 0;
+    while(ros::ok() && count < 1){
+        pub.publish(mats);
+        //auto time_span = static_cast<std::chrono::duration<double>>(end - start);
+        //std::cout<< " sending data took: "<<time_span.count()<<" seconds !!!" << std::endl;
+        ROS_INFO("end send data, go rest ....");
+        //ros::spinOnce();
+
+        //loop_rate.sleep();
+        count++;
+    }
+    end_ = ros::WallTime::now();
+    execution_time = (end_ - start_).toNSec() * 1e-6;
+    ROS_INFO_STREAM("Exectution time1 on Remote (ms): " << execution_time);
+
+    start_ = ros::WallTime::now();
+    while(ros::ok()){
+        //ROS_INFO_STREAM(ros::getGlobalCallbackQueue()->isEmpty());
+        if(!ros::getGlobalCallbackQueue()->isEmpty()){
+            ros::getGlobalCallbackQueue()->callOne();
+            break;
+        }
+    }
+    sub.shutdown(); 
+    end_ = ros::WallTime::now();
+    execution_time = (end_ - start_).toNSec() * 1e-6;
+    ROS_INFO_STREAM("Exectution time2 on Remote (ms): " << execution_time);
+    //ros::spin();
 
     return 0;
 }
