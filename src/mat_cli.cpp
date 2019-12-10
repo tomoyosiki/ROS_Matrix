@@ -25,6 +25,7 @@ void testCallback(const ros_matrix::Matrix::ConstPtr& msg){
 
 int main(int argc, char **argv){
     // System Setting, keep process running on appointed core
+    
     /*
     struct sched_param sp;
     memset(&sp, 0, sizeof(sp));
@@ -43,25 +44,26 @@ int main(int argc, char **argv){
     ros::WallTime start_, end_;
     
     std::string nodeName = argv[1];
+
+    ROS_INFO_STREAM(nodeName);
     start_ = ros::WallTime::now();
     ros::init(argc, argv, nodeName);
 
 
-
+    ROS_INFO_STREAM("Start");
     ros::NodeHandle n;
     std::string arg = argv[2];
     std::size_t pos;
     int nRow = std::stoi(arg, &pos);
     int nCol = nRow;
-
-    ros::Publisher pub = n.advertise<ros_matrix::Matrix_mul>("mat_cal", 1000);
     
-    while(pub.getNumSubscribers() == 0){
-        ;
+    ros::Rate loopRate(10);
+    ros::Publisher pub = n.advertise<ros_matrix::Matrix_mul>("mat_cal", 1000);
+    ROS_INFO_STREAM("get subscribers");
+    while(ros::ok() && pub.getNumSubscribers() <= 0){
+        loopRate.sleep();
     }
 
-
-    ros::Rate loop_rate(1);
     ros_matrix::Matrix_mul mats;
     ros_matrix::Mat_int elem;
     

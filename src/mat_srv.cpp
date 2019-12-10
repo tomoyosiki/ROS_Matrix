@@ -79,7 +79,7 @@ void testCallback(const ros_matrix::Matrix_mul::ConstPtr& msg){
 }
 
 void timerCallback(const std_msgs::String::ConstPtr& msg){
-    //std::cout<< "Scheduling " << Contexts.size() << std::endl;
+    std::cout<< "Scheduling " << Contexts.size() << std::endl;
     //std::chrono::steady_clock sc;
     //auto start = sc.now();
     if(curContextId != -1){
@@ -122,7 +122,7 @@ int main(int argc, char **argv){
     ros::WallTime start_, end_;
     double execution_time = 0.0;
 
-    ros::Rate loop_rate(1);
+    ros::Rate loop_rate(10);
     ROS_INFO("start listen");
     while(ros::ok()){
         if(curContextId >= 0){
@@ -146,10 +146,11 @@ int main(int argc, char **argv){
                         i = 0;
                         int count = 0;
                         ros::Publisher pub = n.advertise<ros_matrix::Matrix>(Contexts[curContextId].topic, 1000);
-                        while(pub.getNumSubscribers() == 0){
-                            ;
+                        ROS_INFO_STREAM("Topic " << Contexts[curContextId].topic << " is checking");
+                        while(pub.getNumSubscribers() <= 0){
+                            loop_rate.sleep();
                         }
-                        
+                        ROS_INFO_STREAM("Topic " << Contexts[curContextId].topic << " is publishing");
                         while(pub.getNumSubscribers() != 0){
                             pub.publish(Contexts[curContextId].Omat);
                         }
