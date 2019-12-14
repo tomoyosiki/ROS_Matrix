@@ -23,6 +23,7 @@ add_message_files(
 add_service_files(
    FILES
    return_mat.srv
+   send_mat.srv
  )
 
 ## Generate actions in the 'action' folder

@@ -9,9 +9,13 @@
 #include <sstream>
 #include <string>
 #include <ros/callback_queue.h>
+#include <ros_matrix/send_mat.h>
 
 ros_matrix::Matrix Omat;
 bool getResult = false;
+int releasedJob = 0;
+int executedJob = 0;
+
 void testCallback(const ros_matrix::Matrix::ConstPtr& msg){
     ROS_INFO_STREAM("Start Callback");
     int nRow = msg->nrow;
@@ -26,7 +30,7 @@ void testCallback(const ros_matrix::Matrix::ConstPtr& msg){
 }
 
 bool returnCallback(ros_matrix::return_mat::Request& req, ros_matrix::return_mat::Response&){
-  ROS_INFO_STREAM("Return Callback");
+    ROS_INFO_STREAM("Return Callback");
     int nRow = req.Omat.nrow;
     int nCol = req.Omat.ncol;
     for(int i = 0; i < nRow * nCol; i++){
@@ -34,11 +38,17 @@ bool returnCallback(ros_matrix::return_mat::Request& req, ros_matrix::return_mat
         int b = (int)req.Omat.data[i].elem;
         if(a != b){
             ROS_INFO_STREAM("Calculation False");
+            return false;
         }
     }
     ROS_INFO_STREAM("Calculation Success");
     getResult = true;
     return true;
+}
+
+void timerCallback(const ros::TimerEvent&){
+    ROS_INFO_STREAM("release " << releasedJob << " executedJob " << executedJob << " waiting new job");
+    releasedJob += 1;
 }
 
 int main(int argc, char **argv){
@@ -52,6 +62,7 @@ int main(int argc, char **argv){
         perror("Problem setting scheduling policy to SCHED_FIFO (probably need rtprio rule in /etc/security/limits.conf)");
         exit(1);
     }
+    
 
     cpu_set_t my_set;
     CPU_ZERO(&my_set);
@@ -64,104 +75,149 @@ int main(int argc, char **argv){
     std::string nodeName = argv[1];
 
     ROS_INFO_STREAM(nodeName);
-    start_ = ros::WallTime::now();
+    
     ros::init(argc, argv, nodeName);
 
 
     ROS_INFO_STREAM("Start");
     ros::NodeHandle n;
-    std::string arg = argv[2];
+    std::string row_arg = argv[2];
     std::size_t pos;
-    int nRow = std::stoi(arg, &pos);
+    int nRow = std::stoi(row_arg, &pos);
     int nCol = nRow;
+    std::string period_arg = argv[3];
+    int period = std::stoi(period_arg);
+
+    ros::ServiceServer return_srv_;
+    ros::ServiceClient task_cli = n.serviceClient<ros_matrix::send_mat>("mat_cal_srv");
+
     
-    ros::Rate loopRate(10);
-    ros::Publisher pub = n.advertise<ros_matrix::Matrix_mul>("mat_cal", 1000);
-    ROS_INFO_STREAM("get subscribers");
-    while(ros::ok() && pub.getNumSubscribers() <= 0){
-        loopRate.sleep();
+    bool ifPeriodic = false;
+    if(period > 0){
+        ifPeriodic= true;
+        ros::Timer timer = n.createTimer(ros::Duration(period / 1000.0), timerCallback);
+    }else{
+        releasedJob = 1;
     }
-
-    ros::ServiceServer return_srv_ = n.advertiseService("return", returnCallback);
-
-    ros_matrix::Matrix_mul mats;
-    ros_matrix::Mat_int elem;
     
-    Omat.nrow = nRow;
-    Omat.ncol = nRow;
-    mats.Lmat.nrow = nRow;
-    mats.Lmat.ncol = nCol;
-    mats.Rmat.nrow = nRow;
-    mats.Rmat.ncol = nCol;
-    nodeName.append("_topic");
-    mats.Rtopic = nodeName;
-    for(int i = 0; i < nRow * nCol; i++){
-        if(i % 2 == 0){
-            elem.elem = 1;
-            mats.Lmat.data.push_back(elem);
-            elem.elem = 2;
-            mats.Rmat.data.push_back(elem);
-        }else{
-            elem.elem = 2;
-            mats.Lmat.data.push_back(elem);
-            elem.elem = 1;
-            mats.Rmat.data.push_back(elem);
+    
+    
+    while(true){
+        ros::spinOnce();
+        if(releasedJob == executedJob){
+            
+            //ROS_INFO_STREAM("release " << releasedJob << " executedJob " << executedJob << " waiting new job");
+            continue;
         }
-        elem.elem = 0;
-        Omat.data.push_back(elem);
-    }
-    end_ = ros::WallTime::now();
-    double execution_time = (end_ - start_).toNSec() * 1e-6;
-    ROS_INFO_STREAM("Data Preparation (ms): " << execution_time);
 
-    start_ = ros::WallTime::now();
-    long sum = 0;
-    for(int i = 0; i < nRow; i++){
-        for(int j = 0; j < nCol; j++){
-            for(int k = 0; k < nCol; k++){
-                int a = (int)mats.Lmat.data[i * nRow + k].elem;
-                int b = (int)mats.Rmat.data[k * nRow + j].elem;
-                Omat.data[i * nRow + j].elem += a * b;
+        std::string returnSrvName = "return_";
+        returnSrvName = returnSrvName + nodeName + std::to_string(executedJob);
+        return_srv_ = n.advertiseService(returnSrvName, returnCallback);
+        
+        start_ = ros::WallTime::now();
+        ros_matrix::send_mat mats;
+        ros_matrix::Mat_int elem;
+        Omat.data.clear();
+        Omat.nrow = nRow;
+        Omat.ncol = nRow;
+        mats.request.Lmat.nrow = nRow;
+        mats.request.Lmat.ncol = nCol;
+        mats.request.Rmat.nrow = nRow;
+        mats.request.Rmat.ncol = nCol;
+        mats.request.Service = returnSrvName;
+        mats.request.Period = period;
+        for(int i = 0; i < nRow * nCol; i++){
+            if(i % 2 == 0){
+                elem.elem = 1;
+                mats.request.Lmat.data.push_back(elem);
+                elem.elem = 2;
+                mats.request.Rmat.data.push_back(elem);
+            }else{
+                elem.elem = 2;
+                mats.request.Lmat.data.push_back(elem);
+                elem.elem = 1;
+                mats.request.Rmat.data.push_back(elem);
+            }
+            elem.elem = 0;
+            Omat.data.push_back(elem);
+        }
+        end_ = ros::WallTime::now();
+        double execution_time = (end_ - start_).toNSec() * 1e-6;
+        ROS_INFO_STREAM("Data Preparation (ms): " << execution_time);
+
+        /*
+        start_ = ros::WallTime::now();
+        long sum = 0;
+        for(int i = 0; i < nRow; i++){
+            for(int j = 0; j < nCol; j++){
+                for(int k = 0; k < nCol; k++){
+                    int a = (int)mats.request.Lmat.data[i * nRow + k].elem;
+                    int b = (int)mats.request.Rmat.data[k * nRow + j].elem;
+                    Omat.data[i * nRow + j].elem += a * b;
+                }
             }
         }
-    }
-    end_ = ros::WallTime::now();
-    execution_time = (end_ - start_).toNSec() * 1e-6;
-    ROS_INFO_STREAM("Exectution time on local (ms): " << execution_time);
+        end_ = ros::WallTime::now();
+        execution_time = (end_ - start_).toNSec() * 1e-6;
+        ROS_INFO_STREAM("Exectution time on local (ms): " << execution_time);
+        */
+
+        start_ = ros::WallTime::now();
+        int i, j, k;
+        i = j = k= 0;
+        while(1){
+            int a = (int)mats.request.Lmat.data[i * nRow + k].elem;
+            int b = (int)mats.request.Rmat.data[k * nRow + j].elem;
+            Omat.data[i * nRow + j].elem += a * b;
+                if(k < nRow - 1){
+                    k++;
+                }else{
+                    k = 0;
+                    if(j < nRow - 1){
+                        j++;
+                    }else{
+                        j = 0;
+                        if(i < nRow - 1){
+                            i++;
+                        }else{
+                            i = 0;
+                            break;
+                        }
+                    }
+                }
+        }
+        end_ = ros::WallTime::now();
+        execution_time = (end_ - start_).toNSec() * 1e-6;
+        ROS_INFO_STREAM("Exectution time on local (ms): " << execution_time);
 
 
-    ROS_INFO("start to send data");
-    start_ = ros::WallTime::now();
-    
-    ros::Subscriber sub = n.subscribe(nodeName, 0, testCallback);
-    // shake hand
-    int count = 0;
-    while(ros::ok() && count < 1){
-        pub.publish(mats);
-        //auto time_span = static_cast<std::chrono::duration<double>>(end - start);
-        //std::cout<< " sending data took: "<<time_span.count()<<" seconds !!!" << std::endl;
-        ROS_INFO("end send data, go rest ....");
-        //ros::spinOnce();
+        ROS_INFO("start to send data");
+        start_ = ros::WallTime::now();
+        
+        task_cli.call(mats);
 
-        //loop_rate.sleep();
-        count++;
-    }
-    end_ = ros::WallTime::now();
-    execution_time = (end_ - start_).toNSec() * 1e-6;
-    ROS_INFO_STREAM("Exectution time1 on Remote (ms): " << execution_time);
+        end_ = ros::WallTime::now();
+        execution_time = (end_ - start_).toNSec() * 1e-6;
+        ROS_INFO_STREAM("Exectution time1 on Remote (ms): " << execution_time);
 
-    start_ = ros::WallTime::now();
-    while(ros::ok()){
-        ros::spinOnce();;
-        if(getResult){
+        start_ = ros::WallTime::now();
+        while(ros::ok()){
+            //ROS_INFO_STREAM("wait");
+            ros::spinOnce();
+            if(getResult){
+                break;
+            }
+        }
+        getResult = false;
+        executedJob += 1;
+        return_srv_.shutdown(); 
+        end_ = ros::WallTime::now();
+        execution_time = (end_ - start_).toNSec() * 1e-6;
+        ROS_INFO_STREAM("Exectution time2 on Remote (ms): " << execution_time);
+        if(!ifPeriodic){
             break;
         }
     }
-    sub.shutdown(); 
-    end_ = ros::WallTime::now();
-    execution_time = (end_ - start_).toNSec() * 1e-6;
-    ROS_INFO_STREAM("Exectution time2 on Remote (ms): " << execution_time);
-    //ros::spin();
-
+    
     return 0;
 }
