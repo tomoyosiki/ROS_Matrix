@@ -2,12 +2,14 @@
 #include <ros_matrix/Mat_int.h>
 #include <ros_matrix/Matrix.h>
 #include <ros_matrix/Matrix_mul.h>
+#include <ros_matrix/Mat_int.h>
 #include "std_msgs/String.h"
 #include <iostream>
 #include <chrono>
 #include <sched.h>
 #include <vector>
 #include <ros/transport_hints.h>
+#include <ros_matrix/return_mat.h>
 
 struct _Context{
     ros_matrix::Matrix Lmat;
@@ -145,6 +147,23 @@ int main(int argc, char **argv){
                     }else{
                         i = 0;
                         int count = 0;
+                        ros::ServiceClient return_cli = n.serviceClient<ros_matrix::return_mat>("return");
+                        ros_matrix::return_mat _mat;
+                        ros_matrix::Mat_int elem;
+                        _mat.request.Omat.nrow = Omat->nrow;
+                        _mat.request.Omat.ncol = Omat->ncol;
+                        for(int k = 0; k < Omat->nrow * Omat->ncol; k++){
+                            elem.elem = Omat->data[k].elem;
+                            _mat.request.Omat.data.push_back(elem);
+                        }
+                        if(return_cli.call(_mat)){
+                            ROS_INFO_STREAM("Suc");
+                        }else{
+                            ROS_INFO_STREAM("fail");
+                        }
+                        Contexts.pop_back();
+                        curContextId = -1;
+                        /*
                         ros::Publisher pub = n.advertise<ros_matrix::Matrix>(Contexts[curContextId].topic, 1000);
                         ROS_INFO_STREAM("Topic " << Contexts[curContextId].topic << " is checking");
                         while(pub.getNumSubscribers() <= 0){
@@ -158,6 +177,7 @@ int main(int argc, char **argv){
                         Contexts.pop_back();
                         curContextId = -1;
                         pub.shutdown();
+                        */
                         //ROS_INFO_STREAM("Exectution time on local (ms): " << execution_time);
                         //execution_time = 0.0;
                         

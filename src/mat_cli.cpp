@@ -2,6 +2,7 @@
 #include <ros_matrix/Mat_int.h>
 #include <ros_matrix/Matrix.h>
 #include <ros_matrix/Matrix_mul.h>
+#include <ros_matrix/return_mat.h>
 #include <iostream>
 #include <chrono>
 #include <sched.h>
@@ -10,6 +11,7 @@
 #include <ros/callback_queue.h>
 
 ros_matrix::Matrix Omat;
+bool getResult = false;
 void testCallback(const ros_matrix::Matrix::ConstPtr& msg){
     ROS_INFO_STREAM("Start Callback");
     int nRow = msg->nrow;
@@ -21,6 +23,22 @@ void testCallback(const ros_matrix::Matrix::ConstPtr& msg){
             ROS_INFO_STREAM("Calculation False");
         }
     }
+}
+
+bool returnCallback(ros_matrix::return_mat::Request& req, ros_matrix::return_mat::Response&){
+  ROS_INFO_STREAM("Return Callback");
+    int nRow = req.Omat.nrow;
+    int nCol = req.Omat.ncol;
+    for(int i = 0; i < nRow * nCol; i++){
+        int a = (int)Omat.data[i].elem;
+        int b = (int)req.Omat.data[i].elem;
+        if(a != b){
+            ROS_INFO_STREAM("Calculation False");
+        }
+    }
+    ROS_INFO_STREAM("Calculation Success");
+    getResult = true;
+    return true;
 }
 
 int main(int argc, char **argv){
@@ -63,6 +81,8 @@ int main(int argc, char **argv){
     while(ros::ok() && pub.getNumSubscribers() <= 0){
         loopRate.sleep();
     }
+
+    ros::ServiceServer return_srv_ = n.advertiseService("return", returnCallback);
 
     ros_matrix::Matrix_mul mats;
     ros_matrix::Mat_int elem;
@@ -132,9 +152,8 @@ int main(int argc, char **argv){
 
     start_ = ros::WallTime::now();
     while(ros::ok()){
-        //ROS_INFO_STREAM(ros::getGlobalCallbackQueue()->isEmpty());
-        if(!ros::getGlobalCallbackQueue()->isEmpty()){
-            ros::getGlobalCallbackQueue()->callOne();
+        ros::spinOnce();;
+        if(getResult){
             break;
         }
     }
