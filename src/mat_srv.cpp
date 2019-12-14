@@ -193,7 +193,7 @@ int main(int argc, char **argv){
                         i = 0;
                         int count = 0;
                         ROS_INFO_STREAM("Service name " << Service);
-                        ros::ServiceClient return_cli = n.serviceClient<ros_matrix::return_mat>(Service);
+                        ros::ServiceClient return_cli = n.serviceClient<ros_matrix::return_mat>(Service, true);
                         return_cli.waitForExistence();
                         
                         ros_matrix::return_mat _mat;

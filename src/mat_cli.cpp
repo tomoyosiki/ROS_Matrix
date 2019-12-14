@@ -89,7 +89,7 @@ int main(int argc, char **argv){
     int period = std::stoi(period_arg);
 
     ros::ServiceServer return_srv_;
-    ros::ServiceClient task_cli = n.serviceClient<ros_matrix::send_mat>("mat_cal_srv");
+    ros::ServiceClient task_cli = n.serviceClient<ros_matrix::send_mat>("mat_cal_srv", true);
     task_cli.waitForExistence();
     ros::Timer timer;
     bool ifPeriodic = false;
