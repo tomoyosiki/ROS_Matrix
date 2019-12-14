@@ -202,11 +202,10 @@ int main(int argc, char **argv){
                             elem.elem = Omat->data[k].elem;
                             _mat.request.Omat.data.push_back(elem);
                         }
-                        if(return_cli.call(_mat)){
-                            ROS_INFO_STREAM("Suc");
-                        }else{
+                        while(!return_cli.call(_mat)){
                             ROS_INFO_STREAM("fail");
                         }
+                        ROS_INFO_STREAM("Suc");
                         Contexts.pop_back();
                         curContextId = -1;
                         /*
