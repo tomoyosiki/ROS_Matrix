@@ -194,6 +194,8 @@ int main(int argc, char **argv){
                         int count = 0;
                         ROS_INFO_STREAM("Service name " << Service);
                         ros::ServiceClient return_cli = n.serviceClient<ros_matrix::return_mat>(Service);
+                        return_cli.waitForExistence();
+                        
                         ros_matrix::return_mat _mat;
                         ros_matrix::Mat_int elem;
                         _mat.request.Omat.nrow = Omat->nrow;
@@ -202,9 +204,7 @@ int main(int argc, char **argv){
                             elem.elem = Omat->data[k].elem;
                             _mat.request.Omat.data.push_back(elem);
                         }
-                        while(!return_cli.call(_mat)){
-                            ROS_INFO_STREAM("fail");
-                        }
+                        return_cli.call(_mat);
                         ROS_INFO_STREAM("Suc");
                         Contexts.pop_back();
                         curContextId = -1;
