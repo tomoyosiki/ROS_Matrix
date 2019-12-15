@@ -90,7 +90,11 @@ int main(int argc, char **argv){
 
     ros::ServiceServer return_srv_;
     ros::ServiceClient task_cli = n.serviceClient<ros_matrix::send_mat>("mat_cal_srv", true);
-    task_cli.waitForExistence();
+    if(task_cli){
+        ROS_INFO_STREAM("true");
+    }else{
+        ROS_INFO_STREAM("false");
+    }
     ros::Timer timer;
     bool ifPeriodic = false;
     if(period > 0){
@@ -194,8 +198,22 @@ int main(int argc, char **argv){
         ROS_INFO("start to send data");
         start_ = ros::WallTime::now();
         
-        task_cli.call(mats);
-        ROS_INFO_STREAM("Suc");
+        if(task_cli.call(mats)){
+            ROS_INFO_STREAM("Suc");
+        }else{
+            ROS_INFO_STREAM("Fail");
+            getResult = false;
+            executedJob += 1;
+            return_srv_.shutdown(); 
+            end_ = ros::WallTime::now();
+            execution_time = (end_ - start_).toNSec() * 1e-6;
+            ROS_INFO_STREAM("Exectution time2 on Remote (ms): " << execution_time);
+            if(!ifPeriodic){
+                break;
+            }
+            continue;
+        }
+
         end_ = ros::WallTime::now();
         execution_time = (end_ - start_).toNSec() * 1e-6;
         ROS_INFO_STREAM("Exectution time1 on Remote (ms): " << execution_time);

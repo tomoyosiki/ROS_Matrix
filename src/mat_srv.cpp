@@ -38,6 +38,33 @@ bool start_sig = false;
 
 int maxPeriod = 0;
 
+void switchContext(){
+    if(curContextId != -1){
+        Contexts[curContextId].i = i;
+        Contexts[curContextId].j = j;
+        Contexts[curContextId].k = k;
+        Contexts[curContextId].Service = Service;
+        curContextId = -1;
+    }
+
+    if(Contexts.size() > 0){
+        curContextId = 0;
+        i = Contexts[curContextId].i;
+        j = Contexts[curContextId].j;
+        k = Contexts[curContextId].k;
+        Service = Contexts[curContextId].Service;
+        Rmat = &Contexts[curContextId].Rmat;
+        
+        Lmat = &Contexts[curContextId].Lmat;
+        //std::cout<<" Lmat Size: "<< Lmat->data.size()<< std::endl;
+        Omat = &Contexts[curContextId].Omat;
+        //std::cout<<" Omat Size: "<< Omat->data.size()<< " Omat max Size " << Omat->data.max_size() << std::endl;
+        
+        Size = Contexts[curContextId].Rmat.nrow;
+        std::cout << "Task " << Service << " curContextId " << curContextId << " i :" << i << " j: " << j << " k:" << k << std::endl;
+        //Contexts.clear();
+    }
+}
 
 bool taskCallback(ros_matrix::send_mat::Request& req, ros_matrix::send_mat::Response&){
     std::cout << "start call back" << std::endl;
@@ -76,7 +103,7 @@ bool taskCallback(ros_matrix::send_mat::Request& req, ros_matrix::send_mat::Resp
         maxPeriod = newCtx.period;
     }else{
         for(int i = 0; i < Contexts.size(); i++){
-            if(Contexts[curContextId].period > newCtx.period){
+            if(Contexts[i].period > newCtx.period){
                 Contexts.insert(Contexts.begin() + i, newCtx);
                 break;
             }
@@ -87,22 +114,20 @@ bool taskCallback(ros_matrix::send_mat::Request& req, ros_matrix::send_mat::Resp
         ROS_INFO_STREAM("Context " << i << " is " << Contexts[i].Service);
     }
     
-    
-    auto end = sc.now();
-
-    auto time_span = static_cast<std::chrono::duration<double>>(end - start); 
-    
-    std::cout<< "callback end " << Contexts.size() << std::endl;
     for(int i = 0; i < Contexts.size(); i++){
         std::cout<<" Size: "<< Contexts[i].Lmat.data.size()<< std::endl;
     }
-    
-    Rmat = &Contexts[curContextId].Rmat;  
-    Lmat = &Contexts[curContextId].Lmat;
-    Omat = &Contexts[curContextId].Omat;
+    auto end = sc.now();
+    auto time_span = static_cast<std::chrono::duration<double>>(end - start); 
+    std::cout<< "callback end " << Contexts.size() << std::endl;
     std::cout<<" Operation took: "<<time_span.count()<<" seconds !!!" << std::endl;
+
+    switchContext();
+
     return true;
 }
+
+
 
 void timerCallback(const ros::TimerEvent&){
     //std::cout<< "Scheduling " << Contexts.size() << std::endl;
@@ -117,7 +142,7 @@ void timerCallback(const ros::TimerEvent&){
     }
 
     if(Contexts.size() > 0){
-        curContextId = Contexts.size() - 1;
+        curContextId = 0;
         i = Contexts[curContextId].i;
         j = Contexts[curContextId].j;
         k = Contexts[curContextId].k;
@@ -147,14 +172,14 @@ int main(int argc, char **argv){
 
     ros::WallTime start_, end_;
     double execution_time = 0.0;
-
+    /*
     std::string arg = argv[1];
     std::size_t pos;
     int fq = std::stoi(arg, &pos);
 
-    ros::Timer timer = n.createTimer(ros::Duration(1.0/fq), timerCallback);
+    //ros::Timer timer = n.createTimer(ros::Duration(1.0/fq), timerCallback);
 
-    /*
+    
     while(ros::ok()){
         //ROS_INFO_STREAM("wait");
         ros::spinOnce();;
@@ -204,8 +229,20 @@ int main(int argc, char **argv){
                             elem.elem = Omat->data[k].elem;
                             _mat.request.Omat.data.push_back(elem);
                         }
-                        return_cli.call(_mat);
-                        ROS_INFO_STREAM("Suc");
+                        if(return_cli.call(_mat)){
+                            ROS_INFO_STREAM("Suc");
+                        }else{
+                            ROS_INFO_STREAM("Fail");
+                            Contexts.pop_back();
+                            curContextId = -1;
+                            return_cli.shutdown();
+                            end_ = ros::WallTime::now();
+                            execution_time += (end_ - start_).toNSec() * 1e-6;
+                            ROS_INFO_STREAM("Exectution time on local (ms): " << execution_time);
+                            execution_time = 0.0;
+                            continue;
+                        }
+                       
                         Contexts.pop_back();
                         curContextId = -1;
                         /*
@@ -227,8 +264,7 @@ int main(int argc, char **argv){
                         end_ = ros::WallTime::now();
                         execution_time += (end_ - start_).toNSec() * 1e-6;
                         ROS_INFO_STREAM("Exectution time on local (ms): " << execution_time);
-                        //execution_time = 0.0;
-                        
+                        execution_time = 0.0;  
                     }
                 }
             }
